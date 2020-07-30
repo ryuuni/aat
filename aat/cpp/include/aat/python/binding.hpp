@@ -32,7 +32,11 @@ PYBIND11_MODULE(binding, m) {
    * Enums
    ******************************/
   using namespace aat::config;
-  py::enum_<Side>(m, "SideCpp", py::arithmetic()).value("BUY", Side::BUY).value("SELL", Side::SELL).export_values();
+  py::enum_<Side>(m, "SideCpp", py::arithmetic())
+    .value("NONE", Side::NONE)
+    .value("BUY", Side::BUY)
+    .value("SELL", Side::SELL)
+    .export_values();
 
   py::enum_<EventType>(m, "EventTypeCpp", py::arithmetic())
     .value("TRADE", EventType::TRADE)

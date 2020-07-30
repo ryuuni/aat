@@ -72,6 +72,7 @@ namespace config {
   };
 
   static const std::vector<str_t> Side_names = {
+    "NONE",
     "BUY",
     "SELL",
   };
@@ -124,6 +125,7 @@ namespace config {
   };
 
   static std::unordered_map<str_t, Side> _Side_mapping = {
+    {"NONE", Side::NONE},
     {"BUY", Side::BUY},
     {"SELL", Side::SELL},
   };
