@@ -97,6 +97,28 @@ PYBIND11_MODULE(binding, m) {
     .def("levels", &OrderBook::levelsMap);
 
   /*******************************
+   * PriceLevel
+   ******************************/
+  py::class_<PriceLevel>(m, "_PriceLevelCpp")
+    .def(py::init<double, Collector&>())
+    .def("__iter__", [](const PriceLevel& pl) { return py::make_iterator(pl.cbegin(), pl.cend()); },
+      py::keep_alive<0, 1>()) /* Essential: keep object alive while iterator exists */
+    .def("getPrice", &PriceLevel::getPrice)
+    .def("getVolume", &PriceLevel::getVolume)
+    .def("add", &PriceLevel::add)
+    .def("__getitem__", &PriceLevel::operator[]);
+
+  /*******************************
+   * Collector
+   ******************************/
+  using namespace pybind11::literals;
+  py::class_<Collector>(m, "_CollectorCpp")
+    .def(py::init<>())
+    .def("pushOpen", &Collector::pushOpen)
+    .def("pushChange", &Collector::pushChange, "order"_a, "accumulate"_a=false)
+    .def("getVolume", &Collector::getVolume);
+
+  /*******************************
    * Exchange
    ******************************/
   py::class_<ExchangeType>(m, "ExchangeTypeCpp")
