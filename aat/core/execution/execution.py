@@ -39,7 +39,6 @@ class OrderManager(object):
     async def onTrade(self, event):
         '''Match trade with order'''
         action, strat, order = False, None, None
-
         for order in event.target.maker_orders:
             if order.id in self._pending_orders:
                 action = True
@@ -74,7 +73,7 @@ class OrderManager(object):
             _, strat = self._pending_orders[order.id]
 
             # TODO ugly private method
-            await self._manager._onReject(strat, event)
+            await self._manager._onReject(strat, order)
             del self._pending_orders[order.id]
 
     async def onOpen(self, event: Event):

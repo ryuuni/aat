@@ -6,6 +6,13 @@ class BaseEnum(Enum):
         return f'{self.value}'
 
 
+class TradingType(BaseEnum):
+    LIVE = 'LIVE'
+    SIMULATION = 'SIMULATION'
+    SANDBOX = 'SANDBOX'
+    BACKTEST = 'BACKTEST'
+
+
 class Side(BaseEnum):
     BUY = 'BUY'
     SELL = 'SELL'
@@ -53,8 +60,15 @@ class InstrumentType(BaseEnum):
     BOND = 'BOND'
     OPTION = 'OPTION'
     FUTURE = 'FUTURE'
-    CURRENCY = 'CURRENCY'
     PAIR = 'PAIR'
+    SPREAD = 'SPREAD'
+    FUTURESOPTION = 'FUTURESOPTION'
+    MUTUALFUND = 'MUTUALFUND'
+    COMMODITIES = 'COMMODITIES'
+
+    # Non-tradeable
+    CURRENCY = 'CURRENCY'
+    INDEX = 'INDEX'
 
 
 class OrderType(BaseEnum):

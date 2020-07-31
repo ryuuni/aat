@@ -22,6 +22,7 @@ namespace core {
     volume = 0.0;
     orders.clear();
     price_levels.clear();
+    taker_order = nullptr;
   }
 
   void
@@ -73,7 +74,12 @@ namespace core {
       throw AATCPPException("No Trade occurred");
     }
 
-    push(std::make_shared<Event>(EventType::TRADE, std::make_shared<Trade>(0, datetime::now(), orders, taker_order)));
+    if (taker_order->volume < volume) {
+      throw AATCPPException("Accumulation error occurred");
+    }
+
+    push(std::make_shared<Event>(EventType::TRADE, std::make_shared<Trade>(0, price, volume, orders, taker_order)));
+    this->taker_order = taker_order;
   }
 
   void
@@ -103,6 +109,14 @@ namespace core {
     for (std::shared_ptr<PriceLevel> pl : price_levels)
       pl->commit();
 
+    // reset order volume/filled
+    for (std::shared_ptr<Order> order : orders)
+      order->rebase();
+
+    // reset order volume/filled
+    if (taker_order)
+      taker_order->rebase();
+
     reset();
   }
 
@@ -110,6 +124,10 @@ namespace core {
   Collector::revert() {
     for (std::shared_ptr<PriceLevel> pl : price_levels)
       pl->revert();
+
+    for (std::shared_ptr<Order> order : orders)
+      order->filled = 0.0;
+
     reset();
   }
 
@@ -126,6 +144,11 @@ namespace core {
   double
   Collector::getVolume() const {
     return volume;
+  }
+
+  std::shared_ptr<Order>
+  Collector::getTakerOrder() const {
+    return taker_order;
   }
 
   std::deque<std::shared_ptr<Order>>

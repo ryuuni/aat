@@ -1,8 +1,35 @@
 from collections import deque
+from ...common import _in_cpp
 from ...config import OrderType, OrderFlag
 
 
+try:
+    from aat.binding import _PriceLevelCpp  # type: ignore
+    _CPP = _in_cpp()
+except ImportError:
+    _CPP = False
+
+
+def _make_cpp_price_level(price, collector):
+    '''helper method to ensure all arguments are setup'''
+    return _PriceLevelCpp(price, collector)
+
+
 class _PriceLevel(object):
+    __slots__ = [
+        "_price",
+        "_orders",
+        "_orders_staged",
+        "_stop_orders",
+        "_stop_orders_staged",
+        "_collector"
+    ]
+
+    def __new__(cls, *args, **kwargs):
+        if _CPP:
+            return _make_cpp_price_level(*args, **kwargs)
+        return super(_PriceLevel, cls).__new__(cls)
+
     def __init__(self, price, collector):
         self._price = price
         self._orders = deque()
@@ -87,11 +114,14 @@ class _PriceLevel(object):
             self.add(taker_order)
             return None, ()
 
-        if taker_order.filled >= taker_order.volume:
+        if taker_order.filled == taker_order.volume:
             # already filled:
             return None, self._get_stop_orders()
 
-        while taker_order.filled < taker_order.volume and self._orders:
+        elif taker_order.filled > taker_order.volume:
+            raise Exception("Unknown error occurred - order book is corrupt")
+
+        while (taker_order.filled < taker_order.volume) and self._orders:
             # need to fill original volume - filled so far
             to_fill = taker_order.volume - taker_order.filled
 
@@ -143,6 +173,7 @@ class _PriceLevel(object):
 
                 else:
                     # maker_order is fully executed
+                    maker_order.filled = maker_order.volume
                     # don't append to deque
                     # tell maker order filled
                     self._collector.pushChange(taker_order)
@@ -156,12 +187,15 @@ class _PriceLevel(object):
                 self._collector.pushFill(taker_order)
                 self._collector.pushFill(maker_order, accumulate=True)
 
-        if taker_order.filled >= taker_order.volume:
+        if taker_order.filled == taker_order.volume:
             # execute the taker order
             self._collector.pushTrade(taker_order)
 
             # return nothing to signify to stop
             return None, self._get_stop_orders()
+
+        elif taker_order.filled > taker_order.volume:
+            raise Exception("Unknown error occurred - order book is corrupt")
 
         # return order, this level is cleared and the order still has volume
         return taker_order, self._get_stop_orders()

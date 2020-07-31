@@ -1,9 +1,12 @@
 import os
 import itertools
+import functools
 
 
+@functools.lru_cache()
 def _in_cpp():
     _cpp = os.environ.get('AAT_USE_CPP', '').lower() in ('1', 'on')
+
     try:
         from aat.binding import (SideCpp, EventTypeCpp, DataTypeCpp, InstrumentTypeCpp,  # type: ignore # noqa: F401
                                  OrderTypeCpp, OrderFlagCpp, OrderBookCpp, ExchangeTypeCpp,  # noqa: F401

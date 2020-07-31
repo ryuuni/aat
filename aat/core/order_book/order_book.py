@@ -102,6 +102,9 @@ class OrderBook(object):
         Args:
             order (Data): order to submit to orderbook
         '''
+        if order is None:
+            raise Exception('Order cannot be None')
+
         # secondary triggered orders
         secondaries = []
 
@@ -181,8 +184,12 @@ class OrderBook(object):
                         if _insort(levels, order.price):
                             # new price level
                             prices[order.price] = _PriceLevel(order.price, collector=self._collector)
+
                         # add order to price level
                         prices[order.price].add(order)
+
+                        # reset order volume/filled
+                        order.rebase()
 
                         # execute secondaries
                         for secondary in secondaries:
@@ -209,6 +216,9 @@ class OrderBook(object):
 
                         # add order to price level
                         prices[order.price].add(order)
+
+                        # reset order volume/filled
+                        order.rebase()
 
                         # execute secondaries
                         for secondary in secondaries:
@@ -241,6 +251,9 @@ class OrderBook(object):
                         # add order to price level
                         prices[order.price].add(order)
 
+                        # reset order volume/filled
+                        order.rebase()
+
                         # execute secondaries
                         for secondary in secondaries:
                             self.add(secondary)
@@ -260,10 +273,16 @@ class OrderBook(object):
                     # add order to price level
                     prices[order.price].add(order)
 
+                    # reset order volume/filled
+                    order.rebase()
+
                     # execute secondaries
                     for secondary in secondaries:
                         self.add(secondary)
         else:
+            if order.filled > order.volume:
+                raise Exception("Unknown error occurred - order book is corrupt")
+
             # don't need to add trade as this is done in the price_levels
             # clear levels
             self._clearOrders(order, self._collector.clearedLevels())

@@ -1,11 +1,12 @@
 import asyncio
 import numpy as np  # type: ignore
 import string
+from datetime import datetime, timedelta
 from collections import deque
-from random import choice, random
+from random import choice, random, randint
 from ..exchange import Exchange
 from ...core import Instrument, OrderBook, Order, Event, ExchangeType
-from ...config import Side, EventType
+from ...config import TradingType, Side, EventType
 
 
 def _getName(n=1):
@@ -16,20 +17,24 @@ def _getName(n=1):
 class SyntheticExchange(Exchange):
     _inst = 0
 
-    def __init__(self, trading_type=None, verbose=False, **kwargs):
+    def __init__(self, trading_type=None, verbose=False, count=5, cycles=10000, **kwargs):
         super().__init__(ExchangeType('synthetic{}'.format(SyntheticExchange._inst)))
         self._trading_type = trading_type
         self._verbose = verbose
-        self._sleep = 0.1 if trading_type in ("live", "simulation") else 0.0
+        self._sleep = 0.1 if trading_type in (TradingType.LIVE, TradingType.SIMULATION, TradingType.SANDBOX) else 0.0
         self._id = 0
         self._events = deque()
         self._pending_orders = deque()
         SyntheticExchange._inst += 1
 
+        self._inst_count = int(count)
+        self._backtest_cycles_total = int(cycles)
         self._backtest_count = 0
 
+        self._time = datetime.now() - timedelta(days=10)
+
     def _seed(self, symbols=None):
-        self._instruments = {symbol: Instrument(symbol) for symbol in symbols or _getName(5)}
+        self._instruments = {symbol: Instrument(symbol) for symbol in symbols or _getName(self._inst_count)}
         self._orderbooks = {Instrument(symbol): OrderBook(instrument=i, exchange_name=self._exchange, callback=lambda x: None) for symbol, i in self._instruments.items()}
         self._seedOrders()
 
@@ -44,18 +49,26 @@ class SyntheticExchange(Exchange):
 
             while start < end:
                 side = Side.BUY if start <= mid else Side.SELL
-                increment = choice((.01, .05, .1, .2))
-                order = Order(volume=round(random() * 10, 0) + 1,
+                increment = choice((.1, .2))
+                order = Order(volume=round(random() * 10, 0) + 3,
                               price=start,
                               side=side,
                               instrument=instrument,
                               exchange=self._exchange)
                 order.id = self._id
 
+                if self._trading_type == TradingType.BACKTEST:
+                    order.timestamp = self._time
+
                 orderbook.add(order)
 
                 start = round(start + increment, 2)
                 self._id += 1
+
+    def _jumptime(self, order):
+        if self._trading_type == TradingType.BACKTEST:
+            order.timestamp = self._time
+            self._time += timedelta(seconds=randint(25, 30))
 
     def __repr__(self):
         ret = ''
@@ -99,9 +112,9 @@ class SyntheticExchange(Exchange):
 
         # loop forever
         while True:
-            if self._trading_type == 'backtest':
+            if self._trading_type == TradingType.BACKTEST:
                 self._backtest_count += 1
-                if self._backtest_count >= 10000:
+                if self._backtest_count >= self._backtest_cycles_total:
                     return
 
             while self._pending_orders:
@@ -122,57 +135,71 @@ class SyntheticExchange(Exchange):
             orderbook = self._orderbooks[instrument]
 
             # add a new buy order, a new sell order, or a cross
-            do = choice(['buy', 'sell', 'change'] * 20 + ['cross'] + ['cancel'] * 10)
+            do = choice(['buy', 'sell'] + ['change'] * 5 + ['cross'] + ['cancel'] * 2)
             levels = orderbook.topOfBook()
-            volume = round(random() * 5, 0) + 1
+            volume = round(random() * 10, 0) + 5
 
             if do == 'buy':
                 # new buy order
                 # choose a price level
-                price = round(levels[Side.SELL][0] - choice((.01, .05, .1, .2)), 2)
+                price = round(levels[Side.BUY][0] - choice((0, .1, .2, .5, 1)), 2)
                 order = Order(volume=volume,
                               price=price,
                               side=Side.BUY,
                               instrument=instrument,
                               exchange=self._exchange)
                 order.id = self._id
+
+                self._jumptime(order)  # advance time in backtest
+
                 orderbook.add(order)
                 self._id += 1
+
             elif do == 'sell':
                 # new sell order
-                price = round(levels[Side.BUY][0] - choice((.01, .05, .1, .2)), 2)
+                price = round(levels[Side.SELL][0] + choice((0, .1, .2, .5, 1)), 2)
                 order = Order(volume=volume,
                               price=price,
                               side=Side.SELL,
                               instrument=instrument,
                               exchange=self._exchange)
                 order.id = self._id
+
+                self._jumptime(order)  # advance time in backtest
+
                 orderbook.add(order)
                 self._id += 1
+
             elif do == 'cross':
                 # cross the spread
-                side = choice(('buy', 'sell'))
-                volume = volume * 2
+                side = choice(['buy'] * 5 + ['sell'] * 4)  # stocks only go up
                 if side == 'buy':
                     # cross to buy
-                    price = round(levels[Side.SELL][0] + choice((0.0, .01, .05)), 2)
+                    price = round(levels[Side.BUY][0] + choice((.5, 1)), 2)
                     order = Order(volume=volume,
                                   price=price,
                                   side=Side.BUY,
                                   instrument=instrument,
                                   exchange=self._exchange)
                     order.id = self._id
+
+                    self._jumptime(order)  # advance time in backtest
+
                     orderbook.add(order)
                     self._id += 1
+
                 else:
                     # cross to sell
-                    price = round(levels[Side.BUY][0] - choice((0.0, .01, .05)), 2)
+                    price = round(levels[Side.SELL][0] - choice((.5, 1)), 2)
                     order = Order(volume=volume,
                                   price=price,
-                                  side=Side.BUY,
+                                  side=Side.SELL,
                                   instrument=instrument,
                                   exchange=self._exchange)
                     order.id = self._id
+
+                    self._jumptime(order)  # advance time in backtest
+
                     orderbook.add(order)
                     self._id += 1
 
@@ -189,9 +216,11 @@ class SyntheticExchange(Exchange):
                     orders = price_level._orders
                     if orders:
                         order = choice(orders)
+                        self._jumptime(order)  # advance time in backtest
 
                         if do == 'cancel':
                             orderbook.cancel(order)
+
                         else:
                             new_volume = max(order.volume + choice((-1, -.5, .5, 1)), 1.0)
                             if new_volume > order.filled:
@@ -208,7 +237,9 @@ class SyntheticExchange(Exchange):
 
                     orders = price_level._orders
                     if orders:
+                        self._jumptime(order)  # advance time in backtest
                         order = choice(orders)
+
                         if do == 'cancel':
                             orderbook.cancel(order)
                         else:
@@ -228,6 +259,7 @@ class SyntheticExchange(Exchange):
     # ******************* #
     async def newOrder(self, order: Order):
         order.id = self._id
+        self._jumptime(order)
         self._id += 1
         self._pending_orders.append(order)
         return order

@@ -3,7 +3,8 @@
 namespace aat {
 namespace core {
 
-  OrderBookIterator& OrderBookIterator::operator++() {
+  OrderBookIterator&
+  OrderBookIterator::operator++() {
     // TODO
 
     return *this;
@@ -127,6 +128,9 @@ namespace core {
             // add order to price level
             prices[order->price]->add(order);
 
+            // reset order volume/filled
+            order->rebase();
+
             // execute secondaries
             for (std::shared_ptr<Order> secondary : secondaries)
               add(secondary);
@@ -151,6 +155,9 @@ namespace core {
             }
             // add order to price level
             prices[order->price]->add(order);
+
+            // reset order volume/filled
+            order->rebase();
 
             // execute secondaries
             for (std::shared_ptr<Order> secondary : secondaries)
@@ -181,6 +188,9 @@ namespace core {
             // add order to price level
             prices[order->price]->add(order);
 
+            // reset order volume/filled
+            order->rebase();
+
             // execute secondaries
             for (std::shared_ptr<Order> secondary : secondaries)
               add(secondary);
@@ -200,6 +210,9 @@ namespace core {
 
           // add order to price level
           prices[order->price]->add(order);
+
+          // reset order volume/filled
+          order->rebase();
 
           // execute secondaries
           for (std::shared_ptr<Order> secondary : secondaries)
@@ -361,7 +374,7 @@ namespace core {
     ret[Side::BUY] = std::vector<std::vector<double>>();
     ret[Side::SELL] = std::vector<std::vector<double>>();
 
-    for (int i = 0; i < levels; ++i) {
+    for (std::uint64_t i = 0; i < levels; ++i) {
       auto _level = level((std::uint64_t)i);
 
       // bid
@@ -385,7 +398,7 @@ namespace core {
     // ask
     ret.push_back(std::vector<double>());
 
-    for (auto i = 0; i < levels; ++i) {
+    for (std::uint64_t i = 0; i < levels; ++i) {
       auto _level = level((std::uint64_t)i);
       ret[0].push_back(_level[0]);
       ret[0].push_back(_level[1]);
@@ -438,7 +451,7 @@ namespace core {
     auto count = 5;
     auto orig = 5;
 
-    for (auto i = 0; i < sell_levels.size(); ++i) {
+    for (std::uint64_t i = 0; i < sell_levels.size(); ++i) {
       if (i < 5) {
         // append to list
         sells_to_print.push_back(sells.at(sell_levels[i]));

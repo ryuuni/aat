@@ -87,10 +87,6 @@ class Order(object):
     # Readonly #
     # ******** #
     @property
-    def timestamp(self) -> int:
-        return self.__timestamp
-
-    @property
     def type(self) -> OrderType:
         return self.__type
 
@@ -139,6 +135,15 @@ class Order(object):
         self.__id = id
 
     @property
+    def timestamp(self) -> int:
+        return self.__timestamp
+
+    @timestamp.setter
+    def timestamp(self, timestamp: datetime) -> None:
+        assert isinstance(timestamp, datetime)
+        self.__timestamp = timestamp
+
+    @property
     def volume(self) -> float:
         return self.__volume
 
@@ -156,6 +161,7 @@ class Order(object):
     @filled.setter
     def filled(self, filled: float) -> None:
         assert isinstance(filled, (int, float))
+        assert filled <= self.volume
         self.__filled = filled
 
     def __repr__(self) -> str:
@@ -165,10 +171,15 @@ class Order(object):
         assert isinstance(other, Order)
         return self.id == other.id and \
             self.instrument == other.instrument and \
+            self.exchange == other.exchange and \
             self.price == other.price and \
             self.volume == other.volume and \
             self.notional == other.notional and \
             self.filled == other.filled
+
+    def rebase(self) -> None:
+        self.__volume = self.__volume - self.__filled
+        self.__filled = 0.0
 
     def to_json(self) -> Mapping[str, Union[str, int, float]]:
         return \
