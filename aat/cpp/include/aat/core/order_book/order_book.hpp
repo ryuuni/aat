@@ -19,24 +19,47 @@ namespace aat {
 namespace core {
   class OrderBook;  // fwd declare
 
+  template<bool is_const>
   class OrderBookIterator {
    public:
     explicit OrderBookIterator(
-      const OrderBook& book, double price_level = 0.0, int index_in_level = 0, Side side = Side::SELL)
+      const OrderBook& book, std::size_t price_index = 0,
+      std::size_t level_index = 0, Side side = Side::SELL, bool pass = false)
       : order_book(book)
-      , price_level(price_level)
-      , index_in_level(index_in_level)
-      , side(side) {}
+      , price_index(price_index)
+      , level_index(level_index)
+      , side(side)
+      , second_pass(pass) { boundsUpdate(true); }
+
+    OrderBookIterator(const OrderBookIterator&) = default;
+
+    template<bool was_const, class = std::enable_if_t<is_const && !was_const>>
+    OrderBookIterator(const OrderBookIterator<was_const>& rhs)
+      : order_book(rhs.order_book)
+      , price_index(rhs.price_index)
+      , level(rhs.level)
+      , level_index(rhs.level_index)
+      , side(rhs.side)
+      , second_pass(rhs.second_pass) {}
 
     OrderBookIterator& operator++();
     std::shared_ptr<Order> operator*();
     bool operator==(const OrderBookIterator& that);
 
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = std::shared_ptr<Order>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+
    private:
+    void boundsUpdate(bool init);
     const OrderBook& order_book;
-    double price_level;
-    int index_in_level;
+    std::size_t price_index;
+    std::size_t level_index;
     Side side;
+    std::shared_ptr<PriceLevel> level;
+    bool second_pass = false;
   };
 
   class OrderBook {
@@ -67,10 +90,23 @@ namespace core {
     str_t toString() const;
 
     // iterator
+    template<bool B>
     friend class OrderBookIterator;
-    typedef OrderBookIterator iterator;
-    iterator begin() const;
-    iterator end() const;
+    using iterator = OrderBookIterator<true>;
+    using const_iterator = OrderBookIterator<false>;
+    iterator begin() noexcept;
+    iterator end() noexcept;
+
+    const_iterator
+    begin() const noexcept {
+        return cbegin();
+    }
+    const_iterator
+    end() const noexcept {
+        return cend();
+    }
+    const_iterator cbegin() const noexcept;
+    const_iterator cend() const noexcept;
 
    private:
     void clearOrders(std::shared_ptr<Order> order, uint_t amount);

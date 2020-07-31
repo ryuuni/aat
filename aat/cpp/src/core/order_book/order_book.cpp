@@ -3,25 +3,89 @@
 namespace aat {
 namespace core {
 
-  OrderBookIterator&
-  OrderBookIterator::operator++() {
-    // TODO
-
+  template<bool B>
+  OrderBookIterator<B>&
+  OrderBookIterator<B>::operator++() {
+    if (++level_index >= level->size()) {
+      level_index = 0;
+      boundsUpdate(false);
+    }
     return *this;
   }
 
-  std::shared_ptr<Order> OrderBookIterator::operator*() {
-    if (side == Side::SELL) {
-      return (*(order_book.sells.at(price_level)))[index_in_level];
-    } else {
-      return (*(order_book.buys.at(price_level)))[index_in_level];
+  template<bool B>
+  void
+  OrderBookIterator<B>::boundsUpdate(bool init) {
+    std::vector<double> const *prices, *other_prices;
+    std::unordered_map<double, std::shared_ptr<PriceLevel>> const *map, *other_map;
+    Side other_side = Side::BUY;
+    switch(side) {
+      case Side::BUY:
+        prices = &order_book.buy_levels;
+        other_prices = &order_book.sell_levels;
+        map = &order_book.buys;
+        other_map = &order_book.sells;
+        other_side = Side::SELL;
+        break;
+      default:
+        prices = &order_book.sell_levels;
+        other_prices = &order_book.buy_levels;
+        map = &order_book.sells;
+        other_map = &order_book.buys;
+        break;
+    }
+    auto size = prices->size();
+    if (price_index < size) {
+      level = map->at((*prices)[price_index]);
+      if (init && level_index >= level->size()) {
+        level_index = level->size() - 1; //Silently reset to end of level
+      }
+    } else if (!(second_pass || init)) {
+        price_index = level_index = 0;
+        level = other_map->at((*other_prices)[price_index]);
+        second_pass = true;
+        side = other_side;
+    } else if (init) { // Silently set to end iterator state
+      price_index = size;
+      level_index = 0;
+      second_pass = true;
     }
   }
 
+  template<bool B>
+  std::shared_ptr<Order>
+  OrderBookIterator<B>::operator*() {
+    return (*level)[level_index];
+  }
+
+  template<bool B>
   bool
-  OrderBookIterator::operator==(const OrderBookIterator& that) {
-    // TODO
-    return false;
+  OrderBookIterator<B>::operator==(const OrderBookIterator& that) {
+    return &order_book == &that.order_book
+        && side == that.side
+        && second_pass == that.second_pass
+        && price_index == that.price_index
+        && level_index == that.level_index;
+  }
+
+  OrderBook::iterator
+  OrderBook::begin() noexcept {
+    return iterator(*this);
+  }
+
+  OrderBook::const_iterator
+  OrderBook::cbegin() const noexcept {
+    return const_iterator(*this);
+  }
+
+  OrderBook::iterator
+  OrderBook::end() noexcept {
+    return iterator(*this, this->buy_levels.size(), 0, Side::BUY, true);
+  }
+
+  OrderBook::const_iterator
+  OrderBook::cend() const noexcept {
+    return const_iterator(*this, this->buy_levels.size(), 0, Side::BUY, true);
   }
 
   OrderBook::OrderBook(const Instrument& instrument)
@@ -496,16 +560,6 @@ namespace core {
       ss << price_level->getVolume() << "\t\t" << price_level->getPrice() << std::endl;
     }
     return ss.str();
-  }
-
-  OrderBookIterator
-  OrderBook::begin() const {
-    return OrderBookIterator(*this);
-  }
-
-  OrderBookIterator
-  OrderBook::end() const {
-    return OrderBookIterator(*this, std::numeric_limits<double>::infinity(), -1, Side::BUY);
   }
 
 }  // namespace core
