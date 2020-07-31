@@ -92,8 +92,8 @@ namespace core {
     // iterator
     template<bool B>
     friend class OrderBookIterator;
-    using iterator = OrderBookIterator<true>;
-    using const_iterator = OrderBookIterator<false>;
+    using iterator = OrderBookIterator<false>;
+    using const_iterator = OrderBookIterator<true>;
     iterator begin() noexcept;
     iterator end() noexcept;
 
