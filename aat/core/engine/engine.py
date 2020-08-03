@@ -41,7 +41,7 @@ class TradingEngine(Application):
 
     # Configureable parameters
     verbose = Bool(default_value=True)
-    api = Bool(default_value=True)
+    api = Bool(default_value=False)
     port = Unicode(default_value='8080', help="Port to run on").tag(config=True)
     event_loop = Instance(klass=asyncio.events.AbstractEventLoop)
     executor = Instance(klass=ThreadPoolExecutor, args=(4,), kwargs={})
@@ -163,10 +163,17 @@ class TradingEngine(Application):
 
             # register callbacks for event types
             for type in EventType.__members__.values():
-                # get callback, could be none if not implemented
-                cb = handler.callback(type)
-                if cb:
-                    self.registerCallback(type, cb, handler)
+                # get callback or callback tuple
+                # could be none if not implemented
+                cbs = handler.callback(type)
+
+                # if not a tuple, make for consistency
+                if not isinstance(cbs, tuple):
+                    cbs = (cbs, )
+
+                for cb in cbs:
+                    if cb:
+                        self.registerCallback(type, cb, handler)
             handler._setManager(self.manager)
             return handler
         return None

@@ -73,7 +73,7 @@ class OrderManager(object):
             _, strat = self._pending_orders[order.id]
 
             # TODO ugly private method
-            await self._manager._onReject(strat, order)
+            await self._manager._onRejected(strat, order)
             del self._pending_orders[order.id]
 
     async def onOpen(self, event: Event):
@@ -115,7 +115,7 @@ class OrderManager(object):
     #########################
     # Order Entry Callbacks #
     #########################
-    async def onBought(self, event: Event):
+    async def onTraded(self, event: Event):
         # TODO
         pass
 
@@ -124,5 +124,9 @@ class OrderManager(object):
         pass
 
     async def onRejected(self, event: Event):
+        # TODO
+        pass
+
+    async def onCanceled(self, event: Event):
         # TODO
         pass

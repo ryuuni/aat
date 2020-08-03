@@ -33,6 +33,9 @@ class SyntheticExchange(Exchange):
 
         self._time = datetime.now() - timedelta(days=10)
 
+        self._omit_cancel = set()
+        self._trend = ['buy'] * 5 + ['sell'] * 4
+
     def _seed(self, symbols=None):
         self._instruments = {symbol: Instrument(symbol) for symbol in symbols or _getName(self._inst_count)}
         self._orderbooks = {Instrument(symbol): OrderBook(instrument=i, exchange_name=self._exchange, callback=lambda x: None) for symbol, i in self._instruments.items()}
@@ -43,14 +46,15 @@ class SyntheticExchange(Exchange):
         for instrument, orderbook in self._orderbooks.items():
 
             # pick a random startpoint, endpoint, and midpoint
-            start = round(random() * 50, 2) + 50
-            end = start + round(random() * 50 + 10, 2) + 50
+            offset = 50
+            start = round(random() * offset, 2) + offset
+            end = start + round(random() * offset + offset / 5, 2) + offset * 2
             mid = (start + end) / 2.0
 
             while start < end:
                 side = Side.BUY if start <= mid else Side.SELL
-                increment = choice((.1, .2))
-                order = Order(volume=round(random() * 10, 0) + 3,
+                increment = choice((.05, .1, .2))
+                order = Order(volume=round(random() * 10, 0) + 5,
                               price=start,
                               side=side,
                               instrument=instrument,
@@ -64,6 +68,30 @@ class SyntheticExchange(Exchange):
 
                 start = round(start + increment, 2)
                 self._id += 1
+
+    def _reseed(self, instrument, side):
+        print("reseeding synthetic exchange...")
+        # reseed
+        orderbook = self._orderbooks[instrument]
+
+        levels = orderbook.topOfBook()
+        start = 0.1 if side == Side.BUY else levels[Side.BUY][0]
+        end = start + round(random() * 50 + 10, 2) + 50
+
+        while start < end:
+            increment = choice((.1, .2))
+            order = Order(volume=round(random() * 10, 0) + 20,
+                          price=start,
+                          side=side,
+                          instrument=instrument,
+                          exchange=self._exchange)
+            order.id = self._id
+
+            if self._trading_type == TradingType.BACKTEST:
+                order.timestamp = self._time
+
+            orderbook.add(order)
+            start = round(start + increment, 2)
 
     def _jumptime(self, order):
         if self._trading_type == TradingType.BACKTEST:
@@ -137,12 +165,12 @@ class SyntheticExchange(Exchange):
             # add a new buy order, a new sell order, or a cross
             do = choice(['buy', 'sell'] + ['change'] * 5 + ['cross'] + ['cancel'] * 2)
             levels = orderbook.topOfBook()
-            volume = round(random() * 10, 0) + 5
+            volume = round(random() * 10, 0) + 10
 
             if do == 'buy':
                 # new buy order
                 # choose a price level
-                price = round(levels[Side.BUY][0] - choice((0, .1, .2, .5, 1)), 2)
+                price = round(levels[Side.BUY][0] - choice((0, .5, 1, 1.5, 2)), 2)
                 order = Order(volume=volume,
                               price=price,
                               side=Side.BUY,
@@ -157,7 +185,13 @@ class SyntheticExchange(Exchange):
 
             elif do == 'sell':
                 # new sell order
-                price = round(levels[Side.SELL][0] + choice((0, .1, .2, .5, 1)), 2)
+                price = round(levels[Side.SELL][0] + choice((0, .5, 1, 1.5, 2)), 2)
+
+                if price == float('inf'):
+                    # liquidity exausted
+                    self._reseed(instrument, Side.SELL)
+                    continue
+
                 order = Order(volume=volume,
                               price=price,
                               side=Side.SELL,
@@ -172,10 +206,26 @@ class SyntheticExchange(Exchange):
 
             elif do == 'cross':
                 # cross the spread
-                side = choice(['buy'] * 5 + ['sell'] * 4)  # stocks only go up
+
+                # update trends
+                if random() < .1:
+                    self._trend.append('sell')
+                # if random() < .2:
+                #     self._trend = [{'buy': 'sell', 'sell': 'buy'}.get(_) for _ in self._trend]
+                elif random() > .9:
+                    # accelerate the trend
+                    self._trend.append('buy')
+
+                side = choice(self._trend)
                 if side == 'buy':
                     # cross to buy
-                    price = round(levels[Side.BUY][0] + choice((.5, 1)), 2)
+                    price = round(levels[Side.BUY][0] + choice((1, 2, 5)), 2)
+
+                    if price <= 0.0:
+                        # liquidity exausted
+                        self._reseed(instrument, Side.BUY)
+                        continue
+
                     order = Order(volume=volume,
                                   price=price,
                                   side=Side.BUY,
@@ -190,7 +240,13 @@ class SyntheticExchange(Exchange):
 
                 else:
                     # cross to sell
-                    price = round(levels[Side.SELL][0] - choice((.5, 1)), 2)
+                    price = round(levels[Side.SELL][0] - choice((1, 2, 5)), 2)
+
+                    if price == float('inf'):
+                        # liquidity exausted
+                        self._reseed(instrument, Side.SELL)
+                        continue
+
                     order = Order(volume=volume,
                                   price=price,
                                   side=Side.SELL,
@@ -216,13 +272,17 @@ class SyntheticExchange(Exchange):
                     orders = price_level._orders
                     if orders:
                         order = choice(orders)
+
+                        if order.id in self._omit_cancel:
+                            continue
+
                         self._jumptime(order)  # advance time in backtest
 
                         if do == 'cancel':
                             orderbook.cancel(order)
 
                         else:
-                            new_volume = max(order.volume + choice((-1, -.5, .5, 1)), 1.0)
+                            new_volume = max(order.volume + choice((-5, -1, 1, 5)), 1.0)
                             if new_volume > order.filled:
                                 order.volume = new_volume
                                 orderbook.change(order)
@@ -240,10 +300,14 @@ class SyntheticExchange(Exchange):
                         self._jumptime(order)  # advance time in backtest
                         order = choice(orders)
 
+                        if order.id in self._omit_cancel:
+                            continue
+
                         if do == 'cancel':
                             orderbook.cancel(order)
+
                         else:
-                            new_volume = max(order.volume + choice((-1, -.5, .5, 1)), 1.0)
+                            new_volume = max(order.volume + choice((-5, -1, 1, 5)), 1.0)
                             if new_volume > order.filled:
                                 order.volume = new_volume
                                 orderbook.change(order)
@@ -259,9 +323,10 @@ class SyntheticExchange(Exchange):
     # ******************* #
     async def newOrder(self, order: Order):
         order.id = self._id
-        self._jumptime(order)
         self._id += 1
+        self._jumptime(order)
         self._pending_orders.append(order)
+        self._omit_cancel.add(order.id)  # don't cancel user orders
         return order
 
 

@@ -116,8 +116,19 @@ class OrderBook(object):
         prices = self._buys if order.side == Side.BUY else self._sells
         prices_cross = self._sells if order.side == Side.BUY else self._buys
 
+        # set order price appropriately
+        if order.order_type == OrderType.MARKET:
+            if order.flag in (None, OrderFlag.NONE):
+                # price goes infinite "fill however you want"
+                order_price = float('inf') if order.side == Side.BUY else float('-inf')
+            else:
+                # with a flag, the price dictates the "max allowed price" to AON or FOK under
+                order_price = order.price
+        else:
+            order_price = order.price
+
         # check if crosses
-        while top is not None and (order.price >= top if order.side == Side.BUY else order.price <= top):
+        while top is not None and (order_price >= top if order.side == Side.BUY else order_price <= top):
             # execute order against level
             # if returns trade, it cleared the level
             # else, order was fully executed
@@ -152,7 +163,7 @@ class OrderBook(object):
                 else:
                     # market order, partial
                     if order.filled > 0:
-                        self._collector.pushTrade(order)
+                        self._collector.pushTrade(order, order.filled)
 
                     # clear levels
                     self._clearOrders(order, self._collector.clearedLevels())
@@ -173,6 +184,9 @@ class OrderBook(object):
                         # cancel the order, do not execute any
                         self._collector.revert()
 
+                        # reset filled
+                        order.filled = 0.0
+
                         # cancel the order
                         self._collector.pushCancel(order)
                         self._collector.commit()
@@ -187,9 +201,6 @@ class OrderBook(object):
 
                         # add order to price level
                         prices[order.price].add(order)
-
-                        # reset order volume/filled
-                        order.rebase()
 
                         # execute secondaries
                         for secondary in secondaries:
@@ -201,6 +212,9 @@ class OrderBook(object):
                         # cancel the order, do not execute any
                         self._collector.revert()
 
+                        # reset filled
+                        order.filled = 0.0
+
                         # cancel the order
                         self._collector.pushCancel(order)
                         self._collector.commit()
@@ -216,9 +230,6 @@ class OrderBook(object):
 
                         # add order to price level
                         prices[order.price].add(order)
-
-                        # reset order volume/filled
-                        order.rebase()
 
                         # execute secondaries
                         for secondary in secondaries:
@@ -251,9 +262,6 @@ class OrderBook(object):
                         # add order to price level
                         prices[order.price].add(order)
 
-                        # reset order volume/filled
-                        order.rebase()
-
                         # execute secondaries
                         for secondary in secondaries:
                             self.add(secondary)
@@ -272,9 +280,6 @@ class OrderBook(object):
 
                     # add order to price level
                     prices[order.price].add(order)
-
-                    # reset order volume/filled
-                    order.rebase()
 
                     # execute secondaries
                     for secondary in secondaries:

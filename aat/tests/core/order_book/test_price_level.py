@@ -12,11 +12,11 @@ class TestOrderBook:
 
     def test_price_level_iter(self):
         pl = _PriceLevel(5, _Collector())
-        orders = [Order(10+i, 5, Side.BUY, Instrument('TEST'), ExchangeType(""),
+        orders = [Order(10 + i, 5, Side.BUY, Instrument('TEST'), ExchangeType(""),
                         0.0, OrderType.LIMIT, OrderFlag.NONE, None)
                   for i in range(2)]
 
-        for o in orders:  # This causes a segfault
+        for o in orders:  # This causes a segfault sometimes
             pl.add(o)
 
         for o, op in zip(orders, pl):
