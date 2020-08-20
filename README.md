@@ -1,4 +1,5 @@
-# AAT
+
+<img src="https://raw.githubusercontent.com/AsyncAlgoTrading/aat/master/docs/img/icon.png" width="200px"></img>
 
 [![Build Status](https://dev.azure.com/tpaine154/aat/_apis/build/status/AsyncAlgoTrading.aat?branchName=master)](https://dev.azure.com/tpaine154/aat/_build/latest?definitionId=19&branchName=master)
 [![Coverage](https://img.shields.io/azure-devops/coverage/tpaine154/aat/19/master)](https://dev.azure.com/tpaine154/aat/_apis/build/status/AsyncAlgoTrading.aat?branchName=master)
@@ -111,6 +112,9 @@ class Strategy(metaclass=ABCMeta):
     async def newOrder(self, order: Order):
         '''helper method, defers to buy/sell'''
 
+    async def cancelOrder(self, order: Order):
+        '''cancel an open order'''
+
     async def buy(self, order: Order):
         '''submit a buy order. Note that this is merely a request for an order, it provides no guarantees that the order will
         execute. At a later point, if your order executes, you will receive an alert via the `bought` method'''
@@ -128,6 +132,9 @@ class Strategy(metaclass=ABCMeta):
     def trades(self, instrument: Instrument = None, exchange: ExchangeType = None, side: Side = None):
         '''select all past trades'''
 
+    def accounts(self) -> List:
+        '''get accounts from source'''
+
     ################
     # Risk Methods #
     ################
@@ -136,6 +143,9 @@ class Strategy(metaclass=ABCMeta):
 
     def risk(self, position=None):
         '''Get risk metrics'''
+
+    def priceHistory(self, instrument: Instrument):
+        '''Get price history for an asset'''
 
     #################
     # Other Methods #
@@ -152,6 +162,9 @@ class Strategy(metaclass=ABCMeta):
 
     def subscribe(self, instrument=None):
         '''Subscribe to market data for the given instrument'''
+
+    def lookup(self, instrument):
+        '''lookup an instrument on the exchange'''
 ```
 
 ### Example Strategy
@@ -569,6 +582,18 @@ To test our strategy in any mode, we may need to setup exchange-specific keys to
 ### Strategies and Exchanges
 We can run any number of strategies against any number of exchanges, including custom user-defined strategies and exchanges not implemented in the core `aat` repository. `aat` will multiplex the event streams and your strategies control which instruments they trade against which exchanges. 
 
+
+| Exchange  | Market Data | Order Entry  |  TradingTypes | Asset Classes |
+|---|---|---|---|---|
+| Synthetic | Yes | Yes | Simulation,Backtest  | Equity |
+| IEX | Yes | Fake | Live, Simulation, Sandbox, Backtest | Equity |
+| InteractiveBrokers | In Progress | Yes |  Live, Simulation, Sandbox | Equity, Option, Future, Commodities, Spreads, Pair |
+| TD Ameritrade | In Progress | In Progress | Equity, Option |
+| Alpaca | In Progress | In Progress |   |
+| Coinbase | In Progress | In Progress |  |
+| Gemini | In Progress | In Progress |  |
+| Coinbase | In Progress | In Progress |  |
+| ccxt | In Progress | In Progress |  |
 
 # TODO below here are sections that still need to be documented
 

@@ -8,6 +8,9 @@ class Strategy(EventHandler, CalculationsMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def __repr__(self):
+        return self.__class__.__name__
+
     #########################
     # Event Handler Methods #
     #########################
@@ -110,6 +113,28 @@ class Strategy(EventHandler, CalculationsMixin):
         # defer to execution
         return await self._manager.newOrder(self, order)
 
+    async def cancelOrder(self, order: Order):
+        '''cancel an open order
+
+        Args:
+            order (Order): an order to submit to the exchange
+        Returns:
+            None
+        '''
+        # defer to execution
+        return await self._manager.cancelOrder(self, order)
+
+    async def cancel(self, order: Order):
+        '''cancel an open order
+
+        Args:
+            order (Order): an order to submit to the exchange
+        Returns:
+            None
+        '''
+        # defer to execution
+        return await self._manager.cancelOrder(self, order)
+
     async def buy(self, order: Order):
         '''submit a buy order. Note that this is merely a request for an order, it provides no guarantees that the order will
         execute. At a later point, if your order executes, you will receive an alert via the `bought` method
@@ -181,7 +206,6 @@ class Strategy(EventHandler, CalculationsMixin):
         Returns:
             list (Position): list of positions
         '''
-        # TODO move me to manager
         return self._manager.positions(instrument=instrument, exchange=exchange, side=side)
 
     def risk(self, position=None):
@@ -192,12 +216,22 @@ class Strategy(EventHandler, CalculationsMixin):
         Returns:
             dict: metrics
         '''
-        # TODO move me to manager
         return self._manager.risk(position=position)
+
+    def priceHistory(self, instrument: Instrument = None):
+        '''Get price history for asset
+
+        Args:
+            instrument (Instrument): get price history for instrument
+        Returns:
+            DataFrame: price history
+        '''
+        return self._manager.priceHistory(instrument=instrument)
 
     #################
     # Other Methods #
     #################
+
     def now(self):
         '''Return the current datetime. Useful to avoid code changes between
         live trading and backtesting. Defaults to `datetime.now`'''
@@ -211,9 +245,17 @@ class Strategy(EventHandler, CalculationsMixin):
         '''Return list of all available exchanges'''
         return list(set(__ for _ in Instrument._instrumentdb.instruments(type=instrument_type) for __ in _.exchanges))
 
+    def accounts(self, type=None, exchange=None):
+        '''Return list of all accounts'''
+        raise NotImplementedError()
+
     def subscribe(self, instrument=None):
         '''Subscribe to market data for the given instrument'''
         return self._manager.subscribe(instrument=instrument, strategy=self)
+
+    async def lookup(self, instrument, exchange=None):
+        '''Return list of all available instruments that match the instrument given'''
+        return await self._manager.lookup(instrument, exchange=exchange)
 
     def slippage(self, trade: Trade):
         '''method to inject slippage when backtesting

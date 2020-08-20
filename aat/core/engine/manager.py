@@ -63,7 +63,7 @@ class StrategyManager(EventHandler):
 
         # push event to loop
         ev = Event(type=Event.Types.BOUGHT, target=trade)
-        self._engine.pushEvent(ev)
+        self._engine.pushTargetedEvent(strategy, ev)
 
         # synchronize state when engine processes this
         self._alerted_events[ev] = (strategy, trade.my_order)
@@ -80,7 +80,7 @@ class StrategyManager(EventHandler):
 
         # push event to loop
         ev = Event(type=Event.Types.SOLD, target=trade)
-        self._engine.pushEvent(ev)
+        self._engine.pushTargetedEvent(strategy, ev)
 
         # synchronize state when engine processes this
         self._alerted_events[ev] = (strategy, trade.my_order)
@@ -95,7 +95,7 @@ class StrategyManager(EventHandler):
         '''
         # push event to loop
         ev = Event(type=Event.Types.REJECTED, target=order)
-        self._engine.pushEvent(ev)
+        self._engine.pushTargetedEvent(strategy, ev)
 
         # synchronize state when engine processes this
         self._alerted_events[ev] = (strategy, order)
@@ -135,9 +135,9 @@ class StrategyManager(EventHandler):
         self._engine.pushEvent(Event(type=Event.Types.REJECTED, target=order))
         return None
 
-    async def cancel(self, strategy, order: Order):
+    async def cancelOrder(self, strategy, order: Order):
         '''cancel an open order'''
-        await self._order_mgr.cancel(strategy, order)
+        await self._order_mgr.cancelOrder(strategy, order)
 
     def orders(self, strategy, instrument: Instrument = None, exchange: ExchangeType = None, side: Side = None):
         '''select all open orders
@@ -216,6 +216,9 @@ class StrategyManager(EventHandler):
 
     def risk(self, position=None):
         return self._risk_mgr.risk(position=position)
+
+    def priceHistory(self, instrument=None):
+        return self._risk_mgr.priceHistory(instrument=instrument)
 
     # **********************
     # EventHandler methods *
@@ -317,14 +320,15 @@ class StrategyManager(EventHandler):
         '''Return list of all available instruments'''
         return Instrument._instrumentdb.instruments(type=type, exchange=exchange)
 
-    def subscribe(self, instrument=None, strategy=None):
+    async def subscribe(self, instrument=None, strategy=None):
         '''Subscribe to market data for the given instrument'''
         if strategy not in self._data_subscriptions:
             self._data_subscriptions[strategy] = []
+
         self._data_subscriptions[strategy].append(instrument)
 
         for exc in self._exchanges:
-            exc.subscribe(instrument)
+            await exc.subscribe(instrument)
 
     def dataSubscriptions(self, handler, event):
         '''does handler subscribe to the data for event'''
@@ -332,3 +336,16 @@ class StrategyManager(EventHandler):
             # subscribe all by default
             return True
         return event.target.instrument in self._data_subscriptions[handler]
+
+    async def lookup(self, instrument: Instrument, exchange=None):
+        '''Return list of all available instruments that match the instrument given'''
+        if exchange in self._exchanges:
+            return await self._exchanges.lookup(instrument)
+        elif exchange is None:
+            ret = []
+            for exchange in self._exchanges:
+                ret.extend(await exchange.lookup(instrument))
+            return ret
+
+        # None implement
+        raise NotImplementedError()

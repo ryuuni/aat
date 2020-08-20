@@ -4,13 +4,18 @@ import pandas as pd  # type: ignore
 
 
 class CalculationsMixin(object):
+    __perf_charts = False  # TODO move
+
     def _constructDf(self, dfs):
         # join along time axis
-        df = pd.concat(dfs, sort=True)
-        df.sort_index(inplace=True)
-        df = df.groupby(df.index).last()
-        df.drop_duplicates(inplace=True)
-        df.fillna(method='ffill', inplace=True)
+        if dfs:
+            df = pd.concat(dfs, sort=True)
+            df.sort_index(inplace=True)
+            df = df.groupby(df.index).last()
+            df.drop_duplicates(inplace=True)
+            df.fillna(method='ffill', inplace=True)
+        else:
+            df = pd.DataFrame()
         return df
 
     def _getInstruments(self):
@@ -21,6 +26,19 @@ class CalculationsMixin(object):
         return instruments
 
     def _getPrice(self):
+        portfolio = []
+        price_cols = []
+        for instrument, price_history in self.priceHistory().items():
+            #########
+            # Price #
+            #########
+            price_col = instrument.name
+            price_cols.append(price_col)
+            price_history.set_index('when', inplace=True)
+            portfolio.append(price_history)
+        return self._constructDf(portfolio)
+
+    def _getAssetPrice(self):
         portfolio = []
         price_cols = []
         for position in self.positions():
@@ -142,7 +160,7 @@ class CalculationsMixin(object):
         self._df_pnl = self._getPnl()
         self._df_pnl.fillna(0.0, inplace=True)
 
-        self._df_price = self._getPrice()
+        self._df_asset_price = self._getAssetPrice()
 
         self._df_total_pnl = self._df_pnl[[c for c in self._df_pnl if 'pnl:' in c]]
         self._df_total_pnl.columns = [c.replace('pnl:', '') for c in self._df_total_pnl.columns]
@@ -158,7 +176,19 @@ class CalculationsMixin(object):
 
     def plotPrice(self, ax=None, **plot_kwargs):
         self._df_price = self._getPrice()
-        self._df_price.plot(ax=ax, **plot_kwargs)
+
+        if not self._df_price.empty:
+            self._df_price.plot(ax=ax, **plot_kwargs)
+
+        if ax:
+            ax.set_ylabel('Price')
+
+    def plotAssetPrice(self, ax=None, **plot_kwargs):
+        self._df_asset_price = self._getAssetPrice()
+
+        if not self._df_asset_price.empty:
+            self._df_asset_price.plot(ax=ax, **plot_kwargs)
+
         if ax:
             ax.set_ylabel('Price')
 
@@ -166,7 +196,9 @@ class CalculationsMixin(object):
         self._df_size = self._getSize()
         self._df_size.columns = [c.replace('s:', '') for c in self._df_size.columns]
 
-        self._df_size.plot(kind='area', ax=ax, stacked=True, linewidth=0, **plot_kwargs)
+        if not self._df_size.empty:
+            self._df_size.plot(kind='area', ax=ax, stacked=True, linewidth=0, **plot_kwargs)
+
         if ax:
             ax.set_ylabel('Positions')
 
@@ -175,10 +207,12 @@ class CalculationsMixin(object):
         df_position_notional.columns = [c.replace('s:', '') for c in self._df_size.columns]
 
         for col in df_position_notional.columns:
-            df_position_notional[col] = df_position_notional[col] * self._df_price[col]
+            df_position_notional[col] = df_position_notional[col] * self._df_asset_price[col]
 
-        df_position_notional.fillna(method='ffill', inplace=True)
-        df_position_notional.plot(kind='area', ax=ax, stacked=True, linewidth=0, **plot_kwargs)
+        if not df_position_notional.empty:
+            df_position_notional.fillna(method='ffill', inplace=True)
+            df_position_notional.plot(kind='area', ax=ax, stacked=True, linewidth=0, **plot_kwargs)
+
         if ax:
             ax.set_ylabel('Notional')
 
@@ -193,7 +227,10 @@ class CalculationsMixin(object):
 
         self._df_total_pnl = self._df_pnl[[c for c in self._df_pnl if 'pnl:' in c]]
         self._df_total_pnl.columns = [c.replace('pnl:', '') for c in self._df_total_pnl.columns]
-        self._df_total_pnl.plot(ax=ax)
+
+        if not self._df_total_pnl.empty:
+            self._df_total_pnl.plot(ax=ax)
+
         if ax:
             ax.set_ylabel('PNL')
 
@@ -206,7 +243,10 @@ class CalculationsMixin(object):
         df2['neg'] = df2['alpha']
         df2['pos'][df2['pos'] <= 0] = np.nan
         df2['neg'][df2['neg'] > 0] = np.nan
-        df2.plot(ax=ax, y=['pos', 'neg'], kind='area', stacked=False, color=['green', 'red'], legend=False, linewidth=0, fontsize=5, rot=0, **plot_kwargs)
+
+        if not df2.empty:
+            df2.plot(ax=ax, y=['pos', 'neg'], kind='area', stacked=False, color=['green', 'red'], legend=False, linewidth=0, fontsize=5, rot=0, **plot_kwargs)
+
         if ax:
             ax.set_ylabel('Alpha')
 
@@ -220,78 +260,86 @@ class CalculationsMixin(object):
             # drop if exactly -100% (e.g. "sold")
             df_returns.append(self._df_notional[col].drop_duplicates().pct_change(1).fillna(0.0))
 
-        df_returns = pd.concat(df_returns, axis=1, sort=True)
-        df_returns.sort_index(inplace=True)
-        df_returns = df_returns.groupby(df_returns.index).last()
-        df_returns.drop_duplicates(inplace=True)
+        if df_returns:
+            df_returns = pd.concat(df_returns, axis=1, sort=True)
+            df_returns.sort_index(inplace=True)
+            df_returns = df_returns.groupby(df_returns.index).last()
+            df_returns.drop_duplicates(inplace=True)
 
-        fig2 = plt.figure(figsize=(9, 5))
-        grid = plt.GridSpec(2, len(df_returns.columns), figure=fig2, wspace=0.4, hspace=0.3)
-        axes2 = []
-        for _ in range(len(df_returns.columns)):
-            axes2.append(plt.subplot(grid[0, _]))
+            fig2 = plt.figure(figsize=(9, 5))
+            grid = plt.GridSpec(2, len(df_returns.columns), figure=fig2, wspace=0.4, hspace=0.3)
+            axes2 = []
+            for _ in range(len(df_returns.columns)):
+                axes2.append(plt.subplot(grid[0, _]))
 
-        for i, col in enumerate(df_returns.columns):
-            df_returns.hist(column=col, ax=axes2[i], grid=False)
+            for i, col in enumerate(df_returns.columns):
+                df_returns.hist(column=col, ax=axes2[i], grid=False)
 
     def plotStdDev(self, ax, **plot_kwargs):
         self._df_notional = self._getNotional()
         self._df_notional.columns = [c.replace('n:', '') for c in self._df_notional.columns]
 
-        total_returns = self._df_notional.sum(axis=1).pct_change(1).fillna(0.0)
-        total_returns_rolling = total_returns.rolling(10)
-        total_returns_rolling.std().plot(ax=ax)
-        ax.axhline(total_returns.std())
-        ax.set_ylabel('Std.')
+        if not self._df_notional.empty:
+            total_returns = self._df_notional.sum(axis=1).pct_change(1).fillna(0.0)
+            total_returns_rolling = total_returns.rolling(10)
+            total_returns_rolling.std().plot(ax=ax)
+            ax.axhline(total_returns.std())
+            ax.set_ylabel('Std.')
 
     def plotSharpe(self, ax, **plot_kwargs):
         self._df_notional = self._getNotional()
         self._df_notional.columns = [c.replace('n:', '') for c in self._df_notional.columns]
 
-        total_returns = self._df_notional.sum(axis=1).pct_change(1).fillna(0.0)
+        if not self._df_notional.empty:
+            total_returns = self._df_notional.sum(axis=1).pct_change(1).fillna(0.0)
 
-        sharpe = total_returns.values.mean() / total_returns.values.std() * np.sqrt(252)
-        total_returns['sharpe'] = total_returns.rolling(10).mean() / total_returns.rolling(10).std() * np.sqrt(252)
-        total_returns['sharpe'].plot(ax=ax)
-        ax.axhline(sharpe)
-        ax.set_ylabel('Sharpe')
+            sharpe = total_returns.values.mean() / total_returns.values.std() * np.sqrt(252)
+            total_returns['sharpe'] = total_returns.rolling(10).mean() / total_returns.rolling(10).std() * np.sqrt(252)
+            total_returns['sharpe'].plot(ax=ax)
+            ax.axhline(sharpe)
+            ax.set_ylabel('Sharpe')
 
     def performanceCharts(self):
-        self.collectStats()
+        if not CalculationsMixin.__perf_charts:
+            self.collectStats()
 
-        ############
-        # Plotting #
-        ############
-        fig, axes = plt.subplots(7, 1,
-                                 sharex=True,
-                                 figsize=(7, 7),
-                                 gridspec_kw={'height_ratios': [2, 1, 3, 1, 1, 1, 1]})
-        plt.rc('legend', fontsize=4)  # using a size in points
+            ############
+            # Plotting #
+            ############
+            fig, axes = plt.subplots(7, 1,
+                                     sharex=True,
+                                     figsize=(7, 7),
+                                     gridspec_kw={'height_ratios': [2, 1, 3, 1, 1, 1, 1]})
+            plt.rc('legend', fontsize=4)  # using a size in points
 
-        # Plot prices
-        self.plotPrice(ax=axes[0])
+            # Plot prices
+            self.plotPrice(ax=axes[0])
+            # self.plotAssetPrice(ax=axes[1])
 
-        # Plot Positions
-        self.plotPositions(ax=axes[1])
+            # Plot Positions
+            self.plotPositions(ax=axes[1])
 
-        # Plot Notionals
-        self.plotNotional(ax=axes[2])
+            # Plot Notionals
+            self.plotNotional(ax=axes[2])
 
-        # Plot PNLs
-        self.plotPnl(ax=axes[3])
+            # Plot PNLs
+            self.plotPnl(ax=axes[3])
 
-        # Plot up/down chart
-        self.plotUpDown(ax=axes[4])
+            # Plot up/down chart
+            self.plotUpDown(ax=axes[4])
 
-        # rolling stddev
-        self.plotStdDev(ax=axes[5])
-        self.plotSharpe(ax=axes[6])
+            # rolling stddev
+            self.plotStdDev(ax=axes[5])
+            self.plotSharpe(ax=axes[6])
 
-        # Plot returns
-        self.plotReturnHistograms()
+            # Plot returns
+            self.plotReturnHistograms()
 
-        # Show plot
-        plt.show()
+            # Show plot
+            plt.show()
+
+            # Only show once
+            CalculationsMixin.__perf_charts = True
 
     def ipython(self):
         import IPython  # type: ignore

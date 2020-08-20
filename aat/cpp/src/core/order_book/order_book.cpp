@@ -181,8 +181,10 @@ namespace core {
           collector.commit();
 
           // execute secondaries
-          for (std::shared_ptr<Order> secondary : secondaries)
+          for (std::shared_ptr<Order> secondary : secondaries) {
+            secondary->timestamp = order->timestamp;  // adjust trigger time
             add(secondary);
+          }
         }
       } else {
         // Limit Orders
@@ -208,8 +210,10 @@ namespace core {
             prices[order->price]->add(order);
 
             // execute secondaries
-            for (std::shared_ptr<Order> secondary : secondaries)
+            for (std::shared_ptr<Order> secondary : secondaries) {
+              secondary->timestamp = order->timestamp;  // adjust trigger time
               add(secondary);
+            }
           }
         } else if (order->flag == OrderFlag::ALL_OR_NONE) {
           if (order->filled > 0) {
@@ -233,8 +237,10 @@ namespace core {
             prices[order->price]->add(order);
 
             // execute secondaries
-            for (std::shared_ptr<Order> secondary : secondaries)
+            for (std::shared_ptr<Order> secondary : secondaries) {
+              secondary->timestamp = order->timestamp;  // adjust trigger time
               add(secondary);
+            }
           }
         } else if (order->flag == OrderFlag::IMMEDIATE_OR_CANCEL) {
           if (order->filled > 0) {
@@ -246,8 +252,10 @@ namespace core {
             collector.commit();
 
             // execute secondaries
-            for (std::shared_ptr<Order> secondary : secondaries)
+            for (std::shared_ptr<Order> secondary : secondaries) {
+              secondary->timestamp = order->timestamp;  // adjust trigger time
               add(secondary);
+            }
 
           } else {
             // add to book
@@ -262,8 +270,10 @@ namespace core {
             prices[order->price]->add(order);
 
             // execute secondaries
-            for (std::shared_ptr<Order> secondary : secondaries)
+            for (std::shared_ptr<Order> secondary : secondaries) {
+              secondary->timestamp = order->timestamp;  // adjust trigger time
               add(secondary);
+            }
           }
         } else {
           // clear levels
@@ -282,8 +292,10 @@ namespace core {
           prices[order->price]->add(order);
 
           // execute secondaries
-          for (std::shared_ptr<Order> secondary : secondaries)
+          for (std::shared_ptr<Order> secondary : secondaries) {
+            secondary->timestamp = order->timestamp;  // adjust trigger time
             add(secondary);
+          }
         }
       }
     } else {
@@ -296,8 +308,10 @@ namespace core {
       collector.commit();
 
       // execute secondaries
-      for (std::shared_ptr<Order> secondary : secondaries)
+      for (std::shared_ptr<Order> secondary : secondaries) {
+        secondary->timestamp = order->timestamp;  // adjust trigger time
         add(secondary);
+      }
     }
 
     // clear the collector

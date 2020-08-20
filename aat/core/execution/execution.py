@@ -33,6 +33,15 @@ class OrderManager(object):
         self._pending_orders[order.id] = (order, strategy)
         return order
 
+    async def cancelOrder(self, strategy, order: Order):
+        exchange = self._exchanges.get(order.exchange)
+        if not exchange:
+            raise Exception('Exchange not installed: {}'.format(order.exchange))
+
+        await exchange.cancelOrder(order)
+        self._pending_orders.pop(order.id)
+        return order
+
     # **********************
     # EventHandler methods *
     # **********************
